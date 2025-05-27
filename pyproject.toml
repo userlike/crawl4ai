@@ -14,10 +14,10 @@ authors = [
 ]
 dependencies = [
     "aiosqlite~=0.20",
-    "lxml",
+    "lxml>=5.3",
     "litellm>=1.53.1",
     "numpy>=1.26.0,<3",
-    "pillow",
+    "pillow>=10.4",
     "python-dotenv~=1.0",
     "requests~=2.26",
     "beautifulsoup4>=4.12",
@@ -27,7 +27,7 @@ dependencies = [
     "colorama~=0.4",
     "snowballstemmer~=2.2",
     "pydantic>=2.10",
-    "pyOpenSSL",
+    "pyOpenSSL>=22.1.0",
     "psutil>=6.1.1",
     "nltk>=3.9.1",
     "aiofiles",
