@@ -14,7 +14,7 @@ authors = [
 ]
 dependencies = [
     "aiosqlite~=0.20",
-    "lxml>=5.3",
+    "lxml",
     "litellm>=1.53.1",
     "numpy>=1.26.0,<3",
     "pillow",
