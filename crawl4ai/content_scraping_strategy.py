@@ -1107,11 +1107,13 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
         """
         Remove an lxml element while preserving its tail text.
 
+        In lxml, text after an element's closing tag is stored in element.tail.
+        When removing an element, this tail text would be lost. This method
+        preserves the tail by attaching it to the previous sibling or parent.
+
         Args:
             element: The element to remove
             preserve_internal_text: If True, also preserve element.text (content inside the tag).
-                                   Set to True for elements being removed due to low word count.
-                                   Set to False for script/style/excluded tags to avoid noise.
         """
         parent = element.getparent()
         if parent is None:
@@ -1186,7 +1188,7 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
                         kwargs.get("exclude_external_links", False)
                         or link_base_domain in exclude_domains
                     ):
-                        self._remove_element_preserve_tail(link)
+                        link.getparent().remove(link)
                         continue
 
                     if normalized_href not in external_links_dict:
@@ -1214,7 +1216,9 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
                 kwargs.get("exclude_external_images", False)
                 and is_external_url(src, base_domain)
             ):
-                self._remove_element_preserve_tail(img)
+                parent = img.getparent()
+                if parent is not None:
+                    parent.remove(img)
                 continue
 
             # Otherwise, process the image as usual.
@@ -1248,17 +1252,17 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
         # Clean up unwanted elements
         if kwargs.get("remove_forms", False):
             for form in element.xpath(".//form"):
-                self._remove_element_preserve_tail(form)
+                form.getparent().remove(form)
 
         if excluded_tags := kwargs.get("excluded_tags", []):
             for tag in excluded_tags:
                 for elem in element.xpath(f".//{tag}"):
-                    self._remove_element_preserve_tail(elem)
+                    elem.getparent().remove(elem)
 
         if excluded_selector := kwargs.get("excluded_selector", ""):
             try:
                 for elem in element.cssselect(excluded_selector):
-                    self._remove_element_preserve_tail(elem)
+                    elem.getparent().remove(elem)
             except Exception:
                 pass  # Invalid selector
 
@@ -1405,9 +1409,6 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
         """
         Remove elements that fall below the desired word threshold in a single pass from the bottom up.
         Skips non-element nodes like HtmlComment and bypasses certain tags that are allowed to have no content.
-
-        NOTE: When removing an element, we preserve its tail text by appending it to the previous sibling
-        or parent to avoid losing content.
         """
         bypass_tags = {
             "a",
@@ -1437,6 +1438,7 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
                 len(text_content.split()) < word_count_threshold
                 and not el.getchildren()
             ):
+                # Preserve tail text to avoid losing content after the element
                 self._remove_element_preserve_tail(el, preserve_internal_text=True)
 
         return root
@@ -1642,29 +1644,30 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
             # This is more efficient in lxml as we remove elements before any processing
             if kwargs.get("exclude_all_images", False):
                 for img in body.xpath('//img'):
-                    self._remove_element_preserve_tail(img)
+                    if img.getparent() is not None:
+                        img.getparent().remove(img)
 
             # Add comment removal
             if kwargs.get("remove_comments", False):
                 comments = body.xpath("//comment()")
                 for comment in comments:
-                    parent = comment.getparent()
-                    if parent is not None:
-                        parent.remove(comment)
+                    comment.getparent().remove(comment)
 
             # Handle tag-based removal first
             excluded_tags = set(kwargs.get("excluded_tags", []) or [])
             if excluded_tags:
                 for tag in excluded_tags:
                     for element in body.xpath(f".//{tag}"):
-                        self._remove_element_preserve_tail(element)
+                        if element.getparent() is not None:
+                            element.getparent().remove(element)
 
             # Handle CSS selector-based exclusion
             excluded_selector = kwargs.get("excluded_selector", "")
             if excluded_selector:
                 try:
                     for element in body.cssselect(excluded_selector):
-                        self._remove_element_preserve_tail(element)
+                        if element.getparent() is not None:
+                            element.getparent().remove(element)
                 except Exception as e:
                     self._log(
                         "error", f"Error with excluded CSS selector: {str(e)}", "SCRAPE"
@@ -1696,7 +1699,8 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
             # Remove script and style tags
             for tag in ["script", "style", "link", "meta", "noscript"]:
                 for element in body.xpath(f".//{tag}"):
-                    self._remove_element_preserve_tail(element)
+                    if element.getparent() is not None:
+                        element.getparent().remove(element)
 
             # Handle social media and domain exclusions
             kwargs["exclude_domains"] = set(kwargs.get("exclude_domains", []))
@@ -1710,7 +1714,8 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
             # Process forms if needed
             if kwargs.get("remove_forms", False):
                 for form in body.xpath(".//form"):
-                    self._remove_element_preserve_tail(form)
+                    if form.getparent() is not None:
+                        form.getparent().remove(form)
 
             # Process content
             media = {"images": [], "videos": [], "audios": [], "tables": []}
