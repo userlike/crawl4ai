@@ -1103,6 +1103,36 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
         self.DIMENSION_REGEX = re.compile(r"(\d+)(\D*)")
         self.BASE64_PATTERN = re.compile(r'data:image/[^;]+;base64,([^"]+)')
 
+    def _remove_element_preserve_tail(self, element: lhtml.HtmlElement, preserve_internal_text: bool = False):
+        """
+        Remove an lxml element while preserving its tail text.
+
+        In lxml, text after an element's closing tag is stored in element.tail.
+        When removing an element, this tail text would be lost. This method
+        preserves the tail by attaching it to the previous sibling or parent.
+
+        Args:
+            element: The element to remove
+            preserve_internal_text: If True, also preserve element.text (content inside the tag).
+        """
+        parent = element.getparent()
+        if parent is None:
+            return
+
+        if preserve_internal_text:
+            preserved_text = (element.text or "") + (element.tail or "")
+        else:
+            preserved_text = element.tail or ""
+
+        if preserved_text:
+            prev_sibling = element.getprevious()
+            if prev_sibling is not None:
+                prev_sibling.tail = (prev_sibling.tail or "") + preserved_text
+            else:
+                parent.text = (parent.text or "") + preserved_text
+
+        parent.remove(element)
+
     def _process_element(
         self,
         url: str,
@@ -1408,9 +1438,8 @@ class LXMLWebScrapingStrategy(WebScrapingStrategy):
                 len(text_content.split()) < word_count_threshold
                 and not el.getchildren()
             ):
-                parent = el.getparent()
-                if parent is not None:
-                    parent.remove(el)
+                # Preserve tail text to avoid losing content after the element
+                self._remove_element_preserve_tail(el, preserve_internal_text=True)
 
         return root
 
